@@ -26,8 +26,34 @@ DEEP_INFRA_MODEL= os.getenv("deep_infra_model")
 auth_key = os.getenv("auth_key")
 
 class ChainlitAgentCallbacks(AgentCallbacks):
+    def __init__(self):
+        self.is_streaming = False
     def on_llm_new_token(self, token: str) -> None:
-        asyncio.run(cl.user_session.get("current_msg").stream_token(token))
+        try:
+            self.is_streaming = True
+            loop = asyncio.get_event_loop()
+            if not loop.is_running():
+                asyncio.run(cl.user_session.get("current_msg").stream_token(token))
+            else:
+                # Chỉ sử dụng MỘT trong hai cách sau, không dùng cả hai:
+                loop.create_task(cl.user_session.get("current_msg").stream_token(token))
+                # KHÔNG gọi cả hai dòng - xóa hoặc comment dòng dưới đây
+                # future = asyncio.ensure_future(cl.user_session.get("current_msg").stream_token(token))
+        except Exception as e:
+            print(f"Error streaming token: {e}")
+
+    def on_llm_end(self) -> None:
+        """Called when LLM streaming ends to finalize the message"""
+        try:
+            if self.is_streaming:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(cl.user_session.get("current_msg").update())
+                else:
+                    asyncio.run(cl.user_session.get("current_msg").update())
+                self.is_streaming = False
+        except Exception as e:
+            Logger.error(f"Error finalizing message: {e}")
 
 def create_tech_agent():
     options = OpenAIAgentOptions(
@@ -127,7 +153,7 @@ def create_X_agent():
         )
     return RXAgent(options)
 
-def create_rx_supervisor(storage = None, num_agents=3):
+def create_rx_supervisor(storage = None, num_agents=99):
     lead_agent = OpenAIAgent(OpenAIAgentOptions(
         api_key=OPENAI_API_KEY,
         name="SupervisorAgent",
@@ -180,7 +206,7 @@ def create_classifier():
 
 
 
-def create_rx_team(storage = None, num_agents=3):
+def create_rx_team(storage = None, num_agents=99):
     try:
         lead_agent = OpenAIAgent(OpenAIAgentOptions(
             api_key=OPENAI_API_KEY,

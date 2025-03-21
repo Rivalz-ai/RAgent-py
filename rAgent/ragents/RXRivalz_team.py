@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from rAgent.agents import SupervisorAgent, SupervisorAgentOptions
 from rAgent.types import ConversationMessage, ParticipantRole
 from rAgent.utils import Logger
-from rAgent.ragents.RXAgent import RXAgent, RXAgentOptions
+from .RXRivalzAgent import RXRivalzAgent, RXAgentRivalzOptions
 from rAgent.ragents.x_tool import Xtools
 from datetime import datetime, timedelta
 import threading
@@ -15,6 +15,7 @@ class RXTeamSupervisorRivalzOptions(SupervisorAgentOptions):
     api_url: str = "https://staging-rome-api-v2.rivalz.ai/agent"
     token_refresh_minutes: int = 110
     number_of_agents: int = 3
+    
 
 class RXTeamSupervisorRivalz(SupervisorAgent):
     def __init__(self, options: RXTeamSupervisorRivalzOptions):
@@ -57,12 +58,12 @@ class RXTeamSupervisorRivalz(SupervisorAgent):
             for idx, token_data in enumerate(token_list):
                 # Extract tokens and expiration
                 access_token = token_data.get('access_token')
-
+                x_id = token_data.get('x_id')
                 if not access_token:
                     Logger.warn(f"Skipping agent {idx + 1} due to missing access token")
                     continue
 
-                agent = RXAgent(RXAgentOptions(
+                agent = RXRivalzAgent(RXAgentRivalzOptions(
                     name=f"RX_Agent_{idx + 1}",
                     description=(
                         f"Social media (Twitter/X) posting agent #{idx + 1}"
@@ -72,6 +73,7 @@ class RXTeamSupervisorRivalz(SupervisorAgent):
                     model=self.lead_agent.model,  # Use same OpenAI model as lead agent
                     base_url=self.lead_agent.base_url,  # Use same OpenAI base URL as lead agent
                     xaccesstoken=access_token,
+                    x_id=x_id,
                     inference_config={
                         'maxTokens': 500,
                         'temperature': 0.5,
@@ -157,7 +159,7 @@ class RXTeamSupervisorRivalz(SupervisorAgent):
                     Logger.warn("More access tokens found than existing agents")
                     # adding new agents
                     for idx in range(len(self.team), len(access_tokens)):
-                        agent = RXAgent(RXAgentOptions(
+                        agent = RXRivalzAgent(RXAgentRivalzOptions(
                             name=f"RX_Agent_{idx + 1}",
                             description=(
                                 f"Social media (Twitter/X) posting agent #{idx + 1}"

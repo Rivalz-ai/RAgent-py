@@ -21,7 +21,6 @@ def generate_start_message(orchestrator: SwarmOrchestrator) -> str:
     return message
 
 
-
 def clean_text(extracted_text: str) -> str:
     """Clean the extracted text by removing tags and ensuring only one instance of [AgentName]."""
     # Remove all occurrences of <\startagent> and <\endagent>

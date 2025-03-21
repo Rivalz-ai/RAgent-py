@@ -7,7 +7,52 @@ from rAgent.types import ConversationMessage
 from backend.utils import generate_start_message, clean_text
 from rAgent.agents import AgentResponse
 import re
+import asyncio
+import requests
+import aiohttp
+# Flag để kiểm soát background task
+polling_active = True
 
+async def update_task_stats(session_id:str):
+    """Background task để cập nhật thống kê task trên sidebar"""
+    async with aiohttp.ClientSession() as session:
+        while polling_active:
+            try:
+                # Gọi API để lấy thống kê task
+                Logger.info(f"Fetching task stats...")
+                async with session.get(f"http://localhost:8000/api/tasks/rx/stats?thread_id={session_id}") as response:
+                    response_text = await response.text()
+                    Logger.info(f"Received task stats response: {response_text}")
+                    stats = await response.json()
+                
+                # Tính toán giá trị progress
+                value = int(stats["completion_percentage"])
+                
+                # Cập nhật sidebar với progress bar
+                await cl.ElementSidebar.set_elements([
+                    cl.CustomElement(
+                        name="CustomProgressBar", 
+                        props={
+                        "value": value,  
+                        "title": "RX Post Tasks",                
+                        "progressName": f"Posted {stats['done']}/{stats['total_tasks']}",
+                        "details": {                            
+                            "total": stats["total_tasks"],
+                            "done": stats["done"],
+                            "failed": stats["failed"], 
+                            "pending": stats["pending"]
+                        },
+                        "completedLinks": stats["list_result_done"]  
+                        }
+                    ),
+                    ])
+                
+                # Chờ 5 giây trước khi cập nhật lại
+                await asyncio.sleep(7)
+                Logger.info("Updated task stats")
+            except Exception as e:
+                Logger.error(f"Error updating task stats: {e}")
+                await asyncio.sleep(10)  # Chờ lâu hơn khi có lỗi
 
 
 
@@ -24,11 +69,36 @@ async def start():
 
     rx_supervisor.force_token_refresh()
     Logger.info("Forced token refresh for RX Supervisor on session start")
-
-    
     start_message = generate_start_message(orchestrator)
     await cl.Message(content=start_message).send()
     Logger.info("Chat session started successfully")
+
+    # Initialize sidebar with empty progress bar
+    elements = [
+        cl.CustomElement(
+            name="CustomProgressBar", 
+            props={
+                "value": 0,  
+                "title": "RX Post Tasks",                
+                "progressName": "Posted 0/0",
+                "details": {                            
+                    "total": 0,
+                    "done": 0,
+                    "failed": 0, 
+                    "pending": 0
+                },
+                "completedLinks": []  
+            }
+        ),
+    ]
+    await cl.ElementSidebar.set_elements(elements)
+    await cl.ElementSidebar.set_title("Task Progress")
+    Logger.info("Initialized sidebar with empty progress bar")
+
+    global polling_active
+    polling_active = True
+    asyncio.create_task(update_task_stats(session_id))
+    Logger.info("Started background task for updating task statistics")
 
 
 
@@ -46,7 +116,7 @@ async def main(message: cl.Message):
         response: AgentResponse = await orchestrator.route_request(message.content, user_id, session_id, {})
         Logger.info(f"Received response from orchestrator for user: {user_id}")
             
-    
+
         # Handle non-streaming responses
         if isinstance(response, AgentResponse) and response.streaming is False:
             raw_output = ""

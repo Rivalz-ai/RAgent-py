@@ -258,7 +258,10 @@ class OpenAIAgent(Agent):
                         if index not in final_tool_calls:
                             final_tool_calls[index] = tool_call
                         final_tool_calls[index].function.arguments += tool_call.function.arguments
-            finish_reason = chunk.choices[0].finish_reason        
+            finish_reason = chunk.choices[0].finish_reason
+
+            if self.callbacks:
+                self.callbacks.on_llm_end()        
             return finish_reason, ''.join(accumulated_message) +"\n" if len(accumulated_message)>0 else None, list(final_tool_calls.values()) if len(final_tool_calls)>0 else None
 
         except Exception as error:

@@ -26,6 +26,9 @@ class AgentCallbacks:
     def on_llm_new_token(self, token: str) -> None:
         # Default implementation
         pass
+    def on_llm_end(self) -> None:
+        # Default implementation
+        pass
 
 
 @dataclass
